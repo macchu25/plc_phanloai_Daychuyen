@@ -147,13 +147,13 @@ export default function QRGeneratorPage() {
     fetchDistricts();
   }, [selectedProvinceCode]);
 
-  // Helper tạo URL Google Maps thu gọn (Short URL) giúp QR có các ô ô vuông to sắc nét, quét từ màn hình ĐT/Lap siêu nhạy
-  const getGoogleMapsURL = (districtName: string, districtCode: string, street: string) => {
+  // Helper tạo URL Google Maps thu gọn + Nhúng Cửa PLC Tự Động (_GATE_X) giúp máy tính PLC nhận diện tức thì
+  const getGoogleMapsURL = (districtName: string, districtCode: string, street: string, gate: number) => {
     const fullLocation = street
       ? `${street}, ${districtName}`
       : districtName;
     const query = encodeURIComponent(fullLocation);
-    return `https://maps.google.com/?q=${query}#${districtCode}`;
+    return `https://maps.google.com/?q=${query}#${districtCode}_GATE_${gate}`;
   };
 
   // Render single QR code preview on Canvas
@@ -162,7 +162,8 @@ export default function QRGeneratorPage() {
       const mapsURL = getGoogleMapsURL(
         selectedDistrict.name,
         selectedDistrict.code,
-        selectedDistrict.streetAddress || streetAddress
+        selectedDistrict.streetAddress || streetAddress,
+        selectedDistrict.gate
       );
       const qrData = orderId
         ? `${mapsURL}_ORD_${orderId}`
@@ -558,7 +559,7 @@ function PrintableCard({ district }: { district: DistrictItem }) {
       const fullAddr = district.streetAddress
         ? `${district.streetAddress}, ${district.name} Viet Nam`
         : `${district.name} Viet Nam`;
-      const mapsURL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}#${district.code}`;
+      const mapsURL = `https://maps.google.com/?q=${encodeURIComponent(fullAddr)}#${district.code}_GATE_${district.gate}`;
 
       QRCode.toCanvas(canvasRef.current, mapsURL, {
         width: 180,

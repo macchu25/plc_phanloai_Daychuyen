@@ -135,7 +135,7 @@ class CameraProcessingThread(QThread):
         rules = self.config.get("rules", [])
         clean_qr = self._remove_accents(qr_data).replace("+", "_").replace(" ", "_") if qr_data else ""
 
-        # Lần 1: Ưu tiên khớp theo Mã QR (Dù là URL Google Maps hay chuỗi mã text)
+        # Lần 1: Ưu tiên khớp theo Mã QR cố định trong config.json
         if clean_qr:
             for rule in rules:
                 req_qr = self._remove_accents(rule.get("qr_contains", "")).replace("+", "_").replace(" ", "_")
@@ -148,6 +148,20 @@ class CameraProcessingThread(QThread):
                         "color": color_name,
                         "qr_data": qr_data
                     }
+
+            # Lần 1.5: Tự động trích xuất Cửa PLC trực tiếp từ mã QR tạo từ Web (VD: GATE_6, GATE_2, GATE_10...)
+            import re
+            gate_match = re.search(r'GATE[_\-]?(\d+)', clean_qr)
+            if gate_match:
+                extracted_gate = int(gate_match.group(1))
+                return {
+                    "matched": True,
+                    "rule_name": f"Định Tuyến Tự Động Web -> Cửa {extracted_gate}",
+                    "gate_id": extracted_gate,
+                    "plc_signal_value": extracted_gate,
+                    "color": color_name,
+                    "qr_data": qr_data
+                }
 
         # Lần 2: Nếu không có mã QR (hoặc QR không khớp), thử khớp theo Màu sắc (RED, GREEN, BLUE)
         if color_name and color_name != "UNKNOWN":

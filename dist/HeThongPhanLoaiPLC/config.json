@@ -1,0 +1,84 @@
+{
+  "camera": {
+    "device_index": 0,
+    "width": 1280,
+    "height": 720,
+    "fps": 60
+  },
+  "plc": {
+    "ip": "127.0.0.1",
+    "port": 502,
+    "slave_id": 1,
+    "register_address": 0,
+    "simulation_mode": true,
+    "auto_reconnect": true,
+    "reconnect_interval": 3.0
+  },
+  "colors": {
+    "RED": {
+      "lower1": [0, 150, 80],
+      "upper1": [8, 255, 255],
+      "lower2": [172, 150, 80],
+      "upper2": [180, 255, 255],
+      "display_color": "#FF3B30"
+    },
+    "GREEN": {
+      "lower1": [38, 120, 70],
+      "upper1": [85, 255, 255],
+      "display_color": "#34C759"
+    },
+    "BLUE": {
+      "lower1": [95, 120, 70],
+      "upper1": [130, 255, 255],
+      "display_color": "#007AFF"
+    }
+  },
+  "rules": [
+    {
+      "name": "Quận Hải Châu - Cửa 1",
+      "qr_contains": "HAI_CHAU",
+      "color": "RED",
+      "gate_id": 1,
+      "plc_signal_value": 1
+    },
+    {
+      "name": "Quận Thanh Khê - Cửa 2",
+      "qr_contains": "THANH_KHE",
+      "color": "GREEN",
+      "gate_id": 2,
+      "plc_signal_value": 2
+    },
+    {
+      "name": "Quận Liên Chiểu - Cửa 3",
+      "qr_contains": "LIEN_CHIEU",
+      "color": "BLUE",
+      "gate_id": 3,
+      "plc_signal_value": 3
+    },
+    {
+      "name": "Quận Ngũ Hành Sơn - Cửa 4",
+      "qr_contains": "NGU_HANH_SON",
+      "color": "",
+      "gate_id": 4,
+      "plc_signal_value": 4
+    },
+    {
+      "name": "Quận Cẩm Lệ - Cửa 5",
+      "qr_contains": "CAM_LE",
+      "color": "",
+      "gate_id": 5,
+      "plc_signal_value": 5
+    }
+  ],
+  "default_rule": {
+    "name": "Khó xác định / Lỗi - Cửa Loại",
+    "gate_id": 99,
+    "plc_signal_value": 99
+  },
+  "system": {
+    "detection_confidence_frames": 1,
+    "high_speed_conveyor_mode": true,
+    "min_color_ratio": 0.04,
+    "roi_box": [200, 100, 880, 520]
+  }
+}

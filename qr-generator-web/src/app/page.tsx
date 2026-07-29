@@ -147,13 +147,13 @@ export default function QRGeneratorPage() {
     fetchDistricts();
   }, [selectedProvinceCode]);
 
-  // Helper tạo URL Google Maps chính xác theo Số nhà, Tên đường, Quận/Huyện, Tỉnh/Thành
+  // Helper tạo URL Google Maps thu gọn (Short URL) giúp QR có các ô ô vuông to sắc nét, quét từ màn hình ĐT/Lap siêu nhạy
   const getGoogleMapsURL = (districtName: string, districtCode: string, street: string) => {
     const fullLocation = street
-      ? `${street}, ${districtName}, Viet Nam`
-      : `${districtName}, Viet Nam`;
+      ? `${street}, ${districtName}`
+      : districtName;
     const query = encodeURIComponent(fullLocation);
-    return `https://www.google.com/maps/search/?api=1&query=${query}#${districtCode}`;
+    return `https://maps.google.com/?q=${query}#${districtCode}`;
   };
 
   // Render single QR code preview on Canvas

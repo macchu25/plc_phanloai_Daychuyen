@@ -825,8 +825,9 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Thông báo", "Đã cập nhật Bảng Quy tắc Phân loại thành công!")
 
     def _on_sim_register_changed(self, reg_addr, reg_val):
-        """Callback từ PLC Simulator hiển thị trên Console Log"""
-        self.add_log(f"[SIMULATOR RECEIVED] Holding Register {reg_addr} = {reg_val}", "INFO")
+        """Callback từ PLC Simulator hiển thị trên Console Log (Thread-safe)"""
+        msg = f"[SIMULATOR GIẢ LẬP] Đã ghi nhận Holding Register {reg_addr} = {reg_val}"
+        self.camera_thread.log_message.emit(msg, "INFO")
 
     @pyqtSlot(str, str)
     def add_log(self, message, level="INFO"):

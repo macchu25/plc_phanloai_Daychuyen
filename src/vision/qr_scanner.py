@@ -1,81 +1,86 @@
 import cv2
+import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
 
 class QRScanner:
     """
-    Module quét và giải mã mã QR từ hình ảnh bằng OpenCV QRCodeDetector 
-    và hỗ trợ pyzbar nếu có cài đặt.
+    Module quét và giải mã mã QR đa tầng (Multi-pass QR Decoder):
+    Tự động lọc tương phản CLAHE, xám hóa, binarization giúp đọc mã QR 
+    từ màn hình điện thoại / máy tính bị chói bóng hoặc mã QR tem in dán hàng.
     """
     def __init__(self):
-        self.opencv_detector = cv2.QRCodeDetector()
-        self.has_pyzbar = False
-        try:
-            from pyzbar import pyzbar
-            self.pyzbar = pyzbar
-            self.has_pyzbar = True
-            logger.info("PyZbar module loaded successfully.")
-        except Exception:
-            logger.info("PyZbar not available. Using OpenCV QRCodeDetector.")
+        self.detector = cv2.QRCodeDetector()
 
     def detect_and_decode(self, frame):
         """
-        Phát hiện mã QR trong frame hình ảnh.
+        Phát hiện mã QR trong frame hình ảnh với nhiều cấp độ xử lý.
         Trả về: list các dict {"data": str, "bbox": np.ndarray}
         """
-        results = []
         if frame is None:
-            return results
+            return []
 
-        # 1. Thử giải mã bằng pyzbar nếu có (tốc độ & độ nhạy tốt hơn)
-        if self.has_pyzbar:
-            try:
-                decoded_objects = self.pyzbar.decode(frame)
-                for obj in decoded_objects:
-                    qr_data = obj.data.decode("utf-8", errors="ignore")
-                    pts = obj.polygon
-                    if len(pts) == 4:
-                        bbox = [[p.x, p.y] for p in pts]
-                    else:
-                        rect = obj.rect
-                        bbox = [
-                            [rect.left, rect.top],
-                            [rect.left + rect.width, rect.top],
-                            [rect.left + rect.width, rect.top + rect.height],
-                            [rect.left, rect.top + rect.height]
-                        ]
-                    results.append({
-                        "data": qr_data,
-                        "bbox": bbox,
-                        "method": "pyzbar"
-                    })
-                if results:
-                    return results
-            except Exception as e:
-                logger.warning(f"PyZbar error: {e}")
+        results = []
 
-        # 2. Thuật toán OpenCV mặc định nếu pyzbar không tìm thấy hoặc chưa cài
+        # Các biến thể xử lý hình ảnh khử chói bóng màn hình điện thoại
+        processed_frames = []
+
+        # 1. Khung hình gốc
+        processed_frames.append(frame)
+
+        # 2. Khung hình Xám (Grayscale)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        processed_frames.append(gray)
+
+        # 3. Nâng tương phản CLAHE (Cực tốt để đọc QR từ màn hình ĐT bị lóa bóng đèn)
         try:
-            retval, decoded_info, points, _ = self.opencv_detector.detectAndDecodeMulti(frame)
-            if retval and points is not None:
-                for info, point in zip(decoded_info, points):
-                    if info:
-                        results.append({
-                            "data": info,
-                            "bbox": point.astype(int).tolist(),
-                            "method": "opencv"
-                        })
-            elif not retval:
-                # Thử single detect
-                data, bbox, _ = self.opencv_detector.detectAndDecode(frame)
-                if data and bbox is not None:
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            enhanced_gray = clahe.apply(gray)
+            processed_frames.append(enhanced_gray)
+
+            # 4. Ngưỡng nhị phân Binarization (Otsu Threshold)
+            _, thresh = cv2.threshold(enhanced_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            processed_frames.append(thresh)
+        except Exception:
+            pass
+
+        # 5. Phóng to vùng trung tâm (Center Crop Zoom 1.3x) nếu QR nhỏ
+        fh, fw = frame.shape[:2]
+        ch_start, ch_end = int(fh * 0.15), int(fh * 0.85)
+        cw_start, cw_end = int(fw * 0.15), int(fw * 0.85)
+        cropped_center = gray[ch_start:ch_end, cw_start:cw_end]
+        if cropped_center.size > 0:
+            zoomed = cv2.resize(cropped_center, (fw, fh), interpolation=cv2.INTER_CUBIC)
+            processed_frames.append(zoomed)
+
+        # Thử đọc qua lần lượt các dạng ảnh
+        for img in processed_frames:
+            try:
+                # 1. Thử Detect Multi
+                retval, decoded_info, points, _ = self.detector.detectAndDecodeMulti(img)
+                if retval and points is not None:
+                    for info, point in zip(decoded_info, points):
+                        if info and info.strip():
+                            results.append({
+                                "data": info.strip(),
+                                "bbox": point.astype(int).tolist(),
+                                "method": "opencv_multi"
+                            })
+                    if results:
+                        return results
+
+                # 2. Thử Detect Single
+                data, bbox, _ = self.detector.detectAndDecode(img)
+                if data and data.strip() and bbox is not None:
                     results.append({
-                        "data": data,
+                        "data": data.strip(),
                         "bbox": bbox[0].astype(int).tolist(),
-                        "method": "opencv"
+                        "method": "opencv_single"
                     })
-        except Exception as e:
-            logger.warning(f"OpenCV QR detect error: {e}")
+                    return results
+
+            except Exception:
+                continue
 
         return results

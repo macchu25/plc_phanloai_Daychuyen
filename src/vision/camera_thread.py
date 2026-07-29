@@ -133,29 +133,37 @@ class CameraProcessingThread(QThread):
     def _classify_product(self, qr_data, color_name):
         """Khớp dữ liệu QR và Màu sắc với bảng Quy tắc Phân loại (Rules)"""
         rules = self.config.get("rules", [])
-        
         clean_qr = self._remove_accents(qr_data).replace("+", "_").replace(" ", "_") if qr_data else ""
 
-        for rule in rules:
-            rule_name = rule.get("name", "N/A")
-            req_qr = self._remove_accents(rule.get("qr_contains", "")).replace("+", "_").replace(" ", "_")
-            req_color = rule.get("color", "")
+        # Lần 1: Ưu tiên khớp theo Mã QR (Dù là URL Google Maps hay chuỗi mã text)
+        if clean_qr:
+            for rule in rules:
+                req_qr = self._remove_accents(rule.get("qr_contains", "")).replace("+", "_").replace(" ", "_")
+                if req_qr and req_qr in clean_qr:
+                    return {
+                        "matched": True,
+                        "rule_name": rule.get("name", "N/A"),
+                        "gate_id": rule.get("gate_id", 1),
+                        "plc_signal_value": rule.get("plc_signal_value", 1),
+                        "color": color_name,
+                        "qr_data": qr_data
+                    }
 
-            # Kiểm tra xem mã QR (dù là URL Google Maps hay chuỗi mã) và màu sắc có khớp không
-            qr_match = (not req_qr) or (clean_qr and req_qr in clean_qr)
-            color_match = (not req_color) or (color_name.upper() == req_color.upper())
+        # Lần 2: Nếu không có mã QR (hoặc QR không khớp), thử khớp theo Màu sắc (RED, GREEN, BLUE)
+        if color_name and color_name != "UNKNOWN":
+            for rule in rules:
+                req_color = rule.get("color", "")
+                if req_color and req_color.upper() == color_name.upper():
+                    return {
+                        "matched": True,
+                        "rule_name": rule.get("name", "N/A"),
+                        "gate_id": rule.get("gate_id", 1),
+                        "plc_signal_value": rule.get("plc_signal_value", 1),
+                        "color": color_name,
+                        "qr_data": qr_data or "None"
+                    }
 
-            if qr_match and color_match and (qr_data or color_name != "UNKNOWN"):
-                return {
-                    "matched": True,
-                    "rule_name": rule_name,
-                    "gate_id": rule.get("gate_id", 1),
-                    "plc_signal_value": rule.get("plc_signal_value", 1),
-                    "color": color_name,
-                    "qr_data": qr_data or "None"
-                }
-
-        # Nếu phát hiện vật thể/QR nhưng không khớp rule nào -> Reject / Cửa mặc định
+        # Lần 3: Nếu phát hiện vật thể/QR nhưng không khớp rule nào -> Cửa Loại (Reject)
         if qr_data or color_name != "UNKNOWN":
             def_rule = self.config.get("default_rule", {})
             return {
@@ -177,14 +185,15 @@ class CameraProcessingThread(QThread):
         }
 
     def _handle_plc_trigger(self, classification):
-        """Cơ chế lọc tín hiệu ổn định và truyền tới PLC"""
+        """Cơ chế lọc tín hiệu phản hồi siêu tốc và truyền tới PLC"""
         val = classification["plc_signal_value"]
         current_time = time.time()
 
-        # Không gửi tín hiệu rỗng (0 = không có sản phẩm)
+        # Không có sản phẩm (val == 0) -> Reset trạng thái để quét sản phẩm mới tức thì (0s trễ)
         if val == 0:
             self.confidence_counter = 0
             self.pending_classification = None
+            self.last_sent_signal = None  # Reset để vật thể tiếp theo chớp là kích hoạt liền
             return
 
         # Đếm số khung hình liên tiếp
@@ -195,10 +204,10 @@ class CameraProcessingThread(QThread):
             self.confidence_counter = 1
 
         req_frames = self.config.get("system", {}).get("detection_confidence_frames", 1)
-        cooldown = 0.5 if self.config.get("system", {}).get("high_speed_conveyor_mode", True) else 1.5
+        cooldown = 0.2 if self.config.get("system", {}).get("high_speed_conveyor_mode", True) else 0.5
 
         if self.confidence_counter >= req_frames:
-            # Tránh gửi lặp lại tín hiệu cùng loại quá nhanh (cooldown 0.5 giây)
+            # Gửi tín hiệu sang PLC nếu là sản phẩm mới hoặc hết cooldown 0.2s
             if val != self.last_sent_signal or (current_time - self.last_sent_time) > cooldown:
                 self.last_sent_signal = val
                 self.last_sent_time = current_time

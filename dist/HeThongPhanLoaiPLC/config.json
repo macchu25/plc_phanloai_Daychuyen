@@ -3,7 +3,7 @@
     "device_index": 0,
     "width": 1280,
     "height": 720,
-    "fps": 60
+    "fps": 120
   },
   "plc": {
     "ip": "127.0.0.1",
